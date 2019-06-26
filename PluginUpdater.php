@@ -34,7 +34,7 @@ class PluginUpdater {
         }
 
         // Query the GitHub API
-        $url = 'https://api.github.com/repos/{$this->username}/{$this->repo}/releases';
+        $url = "https://api.github.com/repos/{$this->username}/{$this->repo}/releases";
 
 // We need the access token for private repos
         if ( ! empty( $this->accessToken ) ) {
