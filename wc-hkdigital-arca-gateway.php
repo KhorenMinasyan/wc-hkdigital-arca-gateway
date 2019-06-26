@@ -3,7 +3,7 @@
 Plugin Name: HKDigital Arca Gateway
 Plugin URI: https://github.com/greghub/ameria-woocommerce-gateway
 Description: Add Credit Card Payment Gateway for WooCommerce
-Version: 1.0.0
+Version: 3.0.0
 Author: Khoren Minasyan
 Author URI: https://github.com/greghub/
 License: MIT License
