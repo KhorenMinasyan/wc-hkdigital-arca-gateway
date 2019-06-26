@@ -11,7 +11,7 @@ License: MIT License
 
 require_once( __DIR__.'/PluginUpdater.php' );
 if ( is_admin() ) {
-    new PluginUpdater( __FILE__, 'KhorenMinasyan', "Repo-Name" );
+    new PluginUpdater( __FILE__, 'KhorenMinasyan', "wc-hkdigital-arca-gateway" );
 }
 
 /*
@@ -161,7 +161,11 @@ function hkd_init_gateway_class() {
          * In case you need a webhook, like PayPal IPN etc
          */
         public function webhook() {
-var_dump($_GET,1011);die;
+//            $order = wc_get_order( $_GET['id'] );
+//            $order->payment_complete();
+//            wc_reduce_stock_levels( $_GET['id'] );
+
+            update_option('webhook_debug', $_GET);
         }
     }
 }
