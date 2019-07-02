@@ -3,7 +3,7 @@
 Plugin Name: HKDigital Arca Payment Gateway
 Plugin URI: #
 Description: Add Credit Card Payment Gateway for WooCommerce
-Version: 3.0.0
+Version: 3.1.1
 Author: HK Digital Agency LLC
 Author URI: https://hkdigital.am
 License: MIT License
