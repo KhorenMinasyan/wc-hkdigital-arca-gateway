@@ -1,6 +1,6 @@
 <?php
 
-class ArcaPluginUpdater {
+class PluginUpdater {
 
     private $slug;
     private $pluginData;
@@ -48,7 +48,11 @@ class ArcaPluginUpdater {
         $this->initPluginData();
         $this->getRepoReleaseInfo();
 
-        $doUpdate = version_compare( $this->githubAPIResult->tag_name, $transient->checked[$this->slug] );
+        $doUpdate = 0;
+
+        if(isset($this->githubAPIResult->tag_name) && isset($transient->checked[$this->slug])) {
+            $doUpdate = version_compare($this->githubAPIResult->tag_name, $transient->checked[$this->slug]);
+        }
 
         if ( $doUpdate == 1 ) {
             $package = $this->githubAPIResult->zipball_url;
@@ -74,7 +78,7 @@ class ArcaPluginUpdater {
 
         $response->last_updated  = $this->githubAPIResult->published_at;
         $response->slug          = $this->slug;
-        $response->plugin_name   = $this->pluginData['Name'];
+        $response->name          = $this->pluginData['Name'];
         $response->version       = $this->githubAPIResult->tag_name;
         $response->author        = $this->pluginData['AuthorName'];
         $response->homepage      = $this->pluginData['PluginURI'];

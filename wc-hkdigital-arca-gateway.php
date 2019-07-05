@@ -9,17 +9,20 @@ Author URI: https://hkdigital.am
 License: MIT License
 */
 
-require_once( __DIR__.'/ArcaPluginUpdater.php' );
-if ( is_admin() ) new ArcaPluginUpdater( __FILE__, 'KhorenMinasyan', "wc-hkdigital-arca-gateway" );
+/**
+ * Including plugin updater via GITHUB.
+ */
+require_once( __DIR__.'/PluginUpdater.php' );
+if ( is_admin() ) new PluginUpdater( __FILE__, 'KhorenMinasyan', "wc-hkdigital-arca-gateway" );
 
-add_filter( 'woocommerce_payment_gateways', 'hkd_add_gateway_class' );
-function hkd_add_gateway_class( $gateways ) {
+add_filter( 'woocommerce_payment_gateways', 'hkd_add_arca_gateway_class' );
+function hkd_add_arca_gateway_class( $gateways ) {
     $gateways[] = 'WC_HKD_Arca_Gateway';
     return $gateways;
 }
 
-add_action( 'plugins_loaded', 'hkd_init_gateway_class' );
-function hkd_init_gateway_class() {
+add_action( 'plugins_loaded', 'hkd_init_arca_gateway_class' );
+function hkd_init_arca_gateway_class() {
 
     class WC_HKD_Arca_Gateway extends WC_Payment_Gateway {
 
@@ -56,7 +59,15 @@ function hkd_init_gateway_class() {
             if ($this->debug) { if ( version_compare( WOOCOMMERCE_VERSION, '2.1', '<' ) ) $this->log = $woocommerce->logger(); else $this->log = new WC_Logger(); }
 
             add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array( $this, 'process_admin_options' ) );
+
+            /**
+             * Success callback url for arca api
+             */
             add_action( 'woocommerce_api_arca_successful', array( $this, 'webhook_arca_successful' ) );
+
+            /**
+             * Failed callback url for arca api
+             */
             add_action( 'woocommerce_api_arca_failed', array( $this, 'webhook_arca_failed' ) );
         }
 
@@ -99,7 +110,7 @@ function hkd_init_gateway_class() {
                         'en' => 'English',
                         'ru' => 'Russian',
                     ],
-                    'description' => '',
+                    'description' => __( 'Select preferred language for arca form interface', 'hkd_gateway' ),
                     'default'     => 'am',
                 ),
                 'testmode' => array(
@@ -143,9 +154,8 @@ function hkd_init_gateway_class() {
             $amount = $order->get_total();
 
             $response = wp_remote_post(
-                $this->api_url. '/register.do?amount='.(int)$amount.'&currency=051'.'&orderNumber='.$order_id.'&password='.$this->password.
-                '&userName='.$this->user_name. '&description=Order N'.$order_id. '&failUrl'.get_site_url().'/wc-api/arca_failed
-                &returnUrl='.get_site_url().'/wc-api/arca_successful&language='.$this->language
+                $this->api_url. '/register.do?amount='.(int)$amount.'&currency=051&orderNumber='.$order_id.'&language='.$this->language.'&password='.$this->password.
+                '&userName='.$this->user_name. '&description=Order N'.$order_id.'&returnUrl='.get_site_url().'/wc-api/arca_successful?order='.$order_id.'&failUrl='.get_site_url().'/wc-api/arca_failed?order='.$order_id
             );
 
             if( !is_wp_error( $response ) ) {
@@ -173,8 +183,9 @@ function hkd_init_gateway_class() {
             $validate = $this->validateFields();if(!$validate['status']){$message = $validate['message'];}
             if (!empty($message)) { ?><div id="message" class="updated fade"><p><?php echo $message; ?></p></div><?php } ?>
             <div class="wrap-content" style="width: 69%;display: inline-block;"><table class="form-table"><thead><tr><th scope="row"><h3>ARCA</h3></th></tr></thead>
-            <?php if($validate['status']){$this->generate_settings_html();?><tr valign="top"><th scope="row">Callback Url</th>
-            <td><?=get_site_url()?>/wc-api/arca_successful</td></tr><?php }else{?><tr valign="top"><th scope="row">Insert Token To Activate Gateway</th>
+            <?php if($validate['status']){$this->generate_settings_html();?><tr valign="top"><th scope="row">Arca callback Url Success</th>
+            <td><?=get_site_url()?>/wc-api/arca_successful</td></tr><tr valign="top"><th scope="row">Arca callback Url Failed</th>
+                <td><?=get_site_url()?>/wc-api/arca_failed</td></tr><?php }else{?><tr valign="top"><th scope="row">Insert Token To Activate Gateway</th>
             <td><input type="text" name="hkd_arca_checkout_id" id="hkd_arca_checkout_id" value="<?php echo $this->hkd_arca_checkout_id; ?>" /></td></tr>
             <?php } ?></table></div><div class="wrap-content" style="width: 29%;display: inline-block;"><iframe width="400" height="500" src="<?=$this->ownerSiteUrl?>?iframe=ad"></iframe></div><?php
         }
@@ -183,24 +194,28 @@ function hkd_init_gateway_class() {
          * @return array|mixed|object
          */
         public function validateFields() {
-            if($this->hkd_arca_checkout_id=='')return['message'=>'you must fill token','status'=>false];$response=wp_remote_post($this->ownerSiteUrl.
+            if($this->hkd_arca_checkout_id==''){$this->update_option( 'enabled', 'no' );return['message'=>'you must fill token','status'=>false];}$response=wp_remote_post($this->ownerSiteUrl.
             '/wp-json/hkd-payment/v1/checkout/',['body'=>['domain'=>$_SERVER['SERVER_NAME'],'checkoutId'=>$this->hkd_arca_checkout_id]]);if(!is_wp_error($response))
-            {return json_decode($response['body'],true);}else{return['message'=>'token not valid!','status'=>false];}
+            {return json_decode($response['body'],true);}else{$this->update_option( 'enabled', 'no' );return['message'=>'token not valid!','status'=>false];}
         }
 
         public function webhook_arca_successful() {
-            if(isset($_GET['orderId'])) {
-                $response = wp_remote_post(
-                        $this->api_url.'/getOrderStatus.do?orderId='.$_GET['orderId'].'&language='.$this->language .
-                        '&password='.$this->password.'&userName='.$this->user_name
-                );
+            if(isset($_GET['order']) && $_GET['order'] !== '') {
+                $order = wc_get_order( $_GET['order'] );
+                $order->update_status( 'processing' );
+                if ( $this->debug ) $this->log->add( $this->id, 'Order #'.$_GET['order'].' successfully added to processing' );
+                wp_redirect($this->get_return_url( $order ));
+            }
+
+           if(isset($_GET['orderId']) && $_GET['orderId'] !== '') {
+                $response = wp_remote_post( $this->api_url.'/getOrderStatus.do?orderId='.$_GET['orderId'].'&language='.$this->language.'&password='.$this->password.'&userName='.$this->user_name );
 
                 if( !is_wp_error( $response ) ) {
                     $body = json_decode( $response['body'] );
                     if ( $body->errorCode == 0 ) {
                         $order  = wc_get_order( $body->OrderNumber );
-                        if ( $this->debug ) $this->log->add( $this->id, 'Order #'.$body->OrderNumber.' successfully added to processing: #'.$_GET['orderId'].'. Error: '.$body->errorMessage );
                         $order->update_status( 'processing' );
+                        if ( $this->debug ) $this->log->add( $this->id, 'Order #'.$body->OrderNumber.' successfully added to processing.' );
                         wp_redirect($this->get_return_url( $order ));
                     } else {
                         if ( $this->debug ) $this->log->add( $this->id, 'something went wrong with Arca callback: #'.$_GET['orderId'].'. Error: '.$body->errorMessage );
@@ -209,19 +224,27 @@ function hkd_init_gateway_class() {
                     if ( $this->debug ) $this->log->add( $this->id, 'something went wrong with Arca callback: #'.$_GET['orderId'] );
                 }
             }
+
+            wc_add_notice(  __( 'Please try again later.', 'hkd_gateway' ), 'error' );
+            wp_redirect(get_permalink( get_option( 'woocommerce_checkout_page_id' ) ));
         }
 
         public function webhook_arca_failed() {
-            if(isset($_GET['orderId'])) {
-                $response = wp_remote_post(
-                    $this->api_url. '/getOrderStatus.do?orderId='.$_GET['orderId'].'&language='.$this->language.
-                    '&password='.$this->password.'&userName='.$this->user_name
-                );
+
+            if(isset($_GET['order']) && $_GET['order'] !== '') {
+                $order = wc_get_order( $_GET['order'] );
+                $order->update_status( 'failed' );
+                if ( $this->debug ) $this->log->add( $this->id, 'Order #'.$_GET['order'].' failed.' );
+                wp_redirect($this->get_return_url( $order ));
+            }
+
+            if(isset($_GET['orderId']) && $_GET['orderId'] !== '') {
+                $response = wp_remote_post($this->api_url. '/getOrderStatus.do?orderId='.$_GET['orderId'].'&language='.$this->language. '&password='.$this->password.'&userName='.$this->user_name);
                 if( !is_wp_error( $response ) ) {
                     $body = json_decode( $response['body'] );
                     if ( $body->errorCode == 0 ) {
                         $order  = wc_get_order( $body->OrderNumber );
-                        $order->update_status( 'failed', $body->errorMessage );
+                        $order->update_status( 'failed' );
                         wp_redirect($this->get_return_url( $order ));
                     } else {
                         if ( $this->debug ) $this->log->add( $this->id, 'something went wrong with Arca callback: #'.$_GET['orderId'].'. Error: '.$body->errorMessage );
@@ -230,6 +253,9 @@ function hkd_init_gateway_class() {
                     if ( $this->debug ) $this->log->add( $this->id, 'something went wrong with Arca callback: #'.$_GET['orderId'] );
                 }
             }
+
+            wc_add_notice(  __( 'Please try again later.', 'hkd_gateway' ), 'error' );
+            wp_redirect(get_permalink( get_option( 'woocommerce_checkout_page_id' ) ));
         }
     }
 }
